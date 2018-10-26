@@ -14,20 +14,39 @@ class Magma
   end
 
   class Migrate < Etna::Command
-    usage '[<version_number>] # Run migrations for the current environment.'
-    
-    def execute(version=nil)
-      Sequel.extension(:migration)
-      db = Magma.instance.db
+    usage '[<project_name> [<version_number>]] # Run migrations for project(s). Use project "magma" for base migrations'
 
+    def execute(project_name=nil, version=nil)
+      Sequel.extension(:migration)
+      @db = Magma.instance.db
+
+      run_magma_migration(version) if !project_name || project_name == 'magma'
+      run_project_migrations(project_name, version)
+    end
+
+    def run_magma_migration(version)
+      table = "schema_info_magma"
+      if version
+        puts "Migrating to version #{version}"
+        Sequel::Migrator.run(@db, 'db/migrations', table: table, target: version.to_i)
+      else
+        puts 'Migrating to latest'
+        Sequel::Migrator.run(@db, 'db/migrations', table: table)
+      end
+    end
+
+    def run_project_migrations(project_name, version)
       Magma.instance.config(:project_path).split(/\s+/).each do |project_dir|
+        m_project_name = ::File.basename(project_dir)
+        next if project_name && project_name != m_project_name
+
         table = "schema_info_#{project_dir.gsub(/[^\w]+/,'_').sub(/^_/,'').sub(/_$/,'')}"
         if version
           puts "Migrating to version #{version}"
-          Sequel::Migrator.run(db, File.join(project_dir, 'migrations'), table: table, target: version.to_i)
+          Sequel::Migrator.run(@db, File.join(project_dir, 'migrations'), table: table, target: version.to_i)
         else
           puts 'Migrating to latest'
-          Sequel::Migrator.run(db, File.join(project_dir, 'migrations'), table: table)
+          Sequel::Migrator.run(@db, File.join(project_dir, 'migrations'), table: table)
         end
       end
     end

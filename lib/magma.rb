@@ -42,6 +42,9 @@ class Magma
   def load_models(validate = true)
     setup_db
 
+    # base models for magma
+    require_relative 'magma/models'
+
     if config(:storage)
       require_relative 'magma/file_uploader'
       require_relative 'magma/image_uploader'
