@@ -6,7 +6,7 @@ Sequel.migration do
       DateTime :updated_at, :null=>false
       String :project_name, null: false
       String :user, null: false
-      String :loader, null: false
+      String :loader_name, null: false
       String :status, null: false
       String :message, null: false
       json :arguments, null: false
