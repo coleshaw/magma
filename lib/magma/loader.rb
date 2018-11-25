@@ -14,144 +14,6 @@ class Magma
     end
   end
 
-  class RecordSet < Array
-    def initialize(model, loader)
-      @model = model
-      @loader = loader
-      @attribute_entries = {}
-    end
-
-    def identifier_id
-      @identifier_id ||= Hash[@model.select_map([@model.identity, :id])]
-    end
-
-    def attribute_entry(att_name, value)
-      attribute_entries(att_name).entry(value)
-    end
-
-    def validate(document)
-      @loader.validate(@model,document) do |error|
-        yield error
-      end
-    end
-
-    private
-
-    def attribute_entries(att_name)
-      @attribute_entries[att_name] ||= @model.attributes[att_name].entry.new(
-        @model, @model.attributes[att_name], @loader
-      )
-    end
-  end
-
-  class RecordEntry
-    attr_reader :complaints
-    attr_accessor :real_id
-
-    def initialize(model, document, set, loader)
-      @document = document
-      @model = model
-      @set = set
-      @loader = loader
-      @complaints = []
-      @valid = true
-
-      check_document_validity
-    end
-
-    def valid_new_entry?
-      valid? && !record_exists?
-    end
-
-    def valid_update_entry?
-      valid? && record_exists?
-    end
-
-    def valid_temp_update?
-      valid? && needs_temp?
-    end
-
-    def valid?
-      @valid
-    end
-
-    def needs_temp?
-      @needs_temp
-    end
-
-    def insert_entry
-      Hash[
-        @document.map do |att_name,value|
-          # filter out temp ids
-          if att_name == :temp_id
-            value.record_entry = self
-            next
-          end
-          if value.is_a? Magma::TempId
-            @needs_temp = true
-            next
-          end
-          @loader.attribute_entry(@model, att_name, value)
-        end.compact
-      ]
-    end
-
-    def update_entry
-      entry = insert_entry
-      entry[:id] = @loader.identifier_id(@model, @document[@model.identity])
-
-      # Never overwrite created_at.
-      entry.delete(:created_at)
-      entry
-    end
-
-    def temp_entry
-      entry = @document.clone
-
-      # Replace the entry with the appropriate values for the column.
-      Hash[
-        entry.map do |att_name,value|
-          if att_name == :temp_id
-            [ :real_id, value.real_id ]
-          elsif value.is_a? Magma::TempId
-            @loader.attribute_entry(@model, att_name, value)
-          else
-            nil
-          end
-        end.compact
-      ]
-    end
-
-    private
-
-    def record_exists?
-      @model.has_identifier? && @loader.identifier_exists?(@model,@document[@model.identity])
-    end
-
-    def check_document_validity
-      @set.validate(@document) do |complaint|
-        complain complaint
-        @valid = false
-      end
-    end
-
-    def complain plaint
-      @complaints << plaint
-    end
-  end
-
-  class BaseAttributeEntry
-    def initialize(model, attribute, loader)
-      @model = model
-      @attribute = attribute
-      @loader = loader
-    end
-
-    def entry value
-      nil
-    end
-  end
-
   # A generic loader class.
   class Loader
     class << self
@@ -159,12 +21,69 @@ class Magma
         @description ||= desc
       end
 
+      def arguments(args=nil)
+        @arguments = args if args
+        @arguments
+      end
+
+      def missing_arguments(user_arguments)
+        @arguments ? @arguments.reject do |arg_name, arg_type|
+          user_arguments.has_key?(arg_name)
+        end.keys : []
+      end
+
+      def invalid_arguments(user_arguments)
+        @arguments ? user_arguments.reject do |arg_name, argument|
+          valid_argument?(arg_name, argument)
+        end.keys : []
+      end
+
+      private
+
+      def valid_argument?(arg_name, user_argument)
+        arg_type = @arguments[arg_name]
+
+        if arg_type == File
+          return user_argument.has_key?(:tempfile) &&
+            user_argument[:tempfile].is_a?(Tempfile)
+        end
+
+        case arg_type
+        when nil
+          return false
+        when Class
+          return user_argument.is_a?(arg_type)
+        when Array
+          return arg_type.any? {|type| user_argument.is_a?(type) }
+        else
+          return false
+        end
+      end
+
+      public
+
       def loader_name
-        name.snake_case.sub(/_loader$/,'')
+        module_name, loader_name = name.split(/::/)
+        loader_name.snake_case.sub(/_loader$/,'').to_sym
+      end
+
+      def project_name
+        module_name, loader_name = name.split(/::/)
+        module_name.snake_case.to_sym
+      end
+
+      def list
+        @descendants || []
+      end
+
+      def inherited(subclass)
+        @descendants ||= []
+        @descendants << subclass
       end
     end
 
-    def initialize
+    def initialize(project_name)
+      @project_name = project_name
       @records = {}
       @temp_id_counter = 0
       @validator = Magma::Validation.new
@@ -308,21 +227,10 @@ class Magma
     end
   end
 
-  class TempId
-    # This marks the column as a temporary id. It needs to be replaced with a
-    # real foreign key id for the corresponding object once it is complete.
-    attr_reader :obj, :id
-    attr_accessor :record_entry
-
-    def initialize(id, obj)
-      @obj = obj
-      @id = id
-    end
-
-    def real_id
-      record_entry.real_id
-    end
-  end
 end
 
+require_relative './loader/base_attribute_entry'
+require_relative './loader/record_entry'
+require_relative './loader/record_set'
+require_relative './loader/temp_id'
 require_relative './loaders/tsv'
