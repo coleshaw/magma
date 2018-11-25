@@ -169,7 +169,114 @@ describe LoadController do
   end
 
   context '#status' do
-    it 'gets a list of current running jobs' do
+    def create_load_request(type, status, user_type=:editor)
+      create(
+        :load_request,
+        type,
+        project_name: 'labors',
+        loader_name: 'test',
+        message: "Request is #{status}.",
+        status: status,
+        user: AUTH_USERS[user_type][:email]
+      )
+    end
+
+    def load_requests(key=nil)
+      key ?
+        json_body[:load_requests].map{|a|a[key]}
+      :
+        json_body[:load_requests]
+    end
+
+    it 'shows open jobs' do
+      lion = create_load_request(:lion, LoadRequest::STATUS_OPEN)
+      hydra = create_load_request(:hydra, LoadRequest::STATUS_OPEN)
+
+      auth_header(:editor)
+      get('/load/labors')
+      expect(last_response.status).to eq(200)
+      expect(load_requests.map(&:keys)).to all(eq(LoadRequest.visible_attributes))
+      expect(load_requests(:status)).to all(eq(LoadRequest::STATUS_OPEN))
+    end
+
+    it 'shows running jobs' do
+      lion = create_load_request(:lion, LoadRequest::STATUS_RUNNING)
+      hydra = create_load_request(:hydra, LoadRequest::STATUS_RUNNING)
+
+      auth_header(:editor)
+      get('/load/labors')
+      expect(last_response.status).to eq(200)
+      expect(load_requests.length).to eq(2)
+      expect(load_requests.map(&:keys)).to all(eq(LoadRequest.columns - [:id]))
+      expect(load_requests(:status)).to all(eq(LoadRequest::STATUS_RUNNING))
+    end
+
+    it 'does not show canceled jobs' do
+      lion = create_load_request(:lion, LoadRequest::STATUS_CANCELED)
+      hydra = create_load_request(:hydra, LoadRequest::STATUS_CANCELED)
+
+      auth_header(:editor)
+      get('/load/labors')
+      expect(last_response.status).to eq(200)
+      expect(load_requests).to eq([])
+    end
+
+    it 'only shows recently completed jobs' do
+      # The lion request was completed more than a week ago
+      Timecop.freeze(Date.today - 30) do
+        lion = create_load_request(:lion, LoadRequest::STATUS_COMPLETE)
+      end
+      # The hydra request was completed today
+      Timecop.freeze(Date.today) do
+        hydra = create_load_request(:hydra, LoadRequest::STATUS_COMPLETE)
+      end
+
+      auth_header(:editor)
+      get('/load/labors')
+
+      # only the hydra is returned
+      expect(last_response.status).to eq(200)
+      expect(load_requests.length).to eq(1)
+      expect(load_requests.first[:arguments][:species_name]).to eq('hydra')
+    end
+
+    it 'only shows recently failed jobs' do
+      # The lion request failed more than a week ago
+      Timecop.freeze(Date.today - 30) do
+        lion = create_load_request(:lion, LoadRequest::STATUS_FAILED)
+      end
+      # The hydra request failed today
+      Timecop.freeze(Date.today) do
+        hydra = create_load_request(:hydra, LoadRequest::STATUS_FAILED)
+      end
+
+      auth_header(:editor)
+      get('/load/labors')
+
+      # only the hydra is returned
+      expect(last_response.status).to eq(200)
+      expect(load_requests.length).to eq(1)
+      expect(load_requests.first[:arguments][:species_name]).to eq('hydra')
+    end
+
+    it 'only returns jobs for the requesting user' do
+      # The lion and bird requests were made by someone else
+      lion = create_load_request(:lion, LoadRequest::STATUS_OPEN,:restricted_editor)
+      birds = create_load_request(:lion, LoadRequest::STATUS_FAILED,:restricted_editor)
+
+      # The hydra and hind requests were made by us
+      hydra = create_load_request(:hydra, LoadRequest::STATUS_OPEN)
+      hind = create_load_request(:hind, LoadRequest::STATUS_FAILED)
+
+      auth_header(:editor)
+      get('/load/labors')
+
+      # only the hydra and hind are returned
+      expect(last_response.status).to eq(200)
+      expect(load_requests.length).to eq(2)
+      expect(load_requests(:arguments).map{|a| a[:species_name]}).to eq(
+        ['hydra', 'red deer']
+      )
     end
   end
 end

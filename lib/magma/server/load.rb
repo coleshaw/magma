@@ -3,13 +3,28 @@ require_relative 'controller'
 class LoadController < Magma::Controller
   def initialize(request, action)
     super
-    require_param(:loader)
   end
 
   def status
-    tasks = LoaderTask.for_project(@params[:project_name])
+    tasks = LoadRequest.where(
+      project_name: @params[:project_name],
+      user: @user.email,
+      status: [
+        LoadRequest::STATUS_OPEN,
+        LoadRequest::STATUS_RUNNING,
+      ]
+    ).all + LoadRequest.where(
+      project_name: @params[:project_name],
+      user: @user.email,
+      status: [
+        LoadRequest::STATUS_COMPLETE,
+        LoadRequest::STATUS_FAILED
+      ]
+    ).where{
+      updated_at > Date.today - 7
+    }.all
 
-    success(tasks.map(&:to_hash).to_json, 'application/json')
+    success({ load_requests: tasks.map(&:to_hash) }.to_json, 'application/json')
   end
 
   def schedule
