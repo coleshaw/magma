@@ -25,6 +25,19 @@ class Magma
       models.values.map(&:migration).reject(&:empty?)
     end
 
+    def get_loader(loader_name)
+      loader_name = loader_name.to_sym
+      loaders.find do |loader|
+        loader.loader_name == loader_name
+      end
+    end
+
+    def loaders
+      Magma::Loader.list.select do |loader|
+        loader.project_name == :magma || loader.project_name == @project_name
+      end
+    end
+
     private
 
     def project_container

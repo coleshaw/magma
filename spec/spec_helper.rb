@@ -244,6 +244,29 @@ FactoryBot.define do
   factory :project, class: Labors::Project do
     to_create(&:save)
   end
+
+  factory :load_request, class: LoadRequest do
+    to_create(&:save)
+
+    trait :lion do
+      arguments { {monster_name: 'Nemean Lion', species_name: 'lion' } }
+    end
+    trait :hydra do
+      arguments { {monster_name: 'Lernean Hydra', species_name: 'hydra'} }
+    end
+    trait :bird do
+      arguments { {monster_name: 'Nemean Lion', species_name: 'lion' } }
+    end
+    trait :hydra do
+      arguments { {monster_name: 'Lernean Hydra', species_name: 'hydra'} }
+    end
+    trait :hind do
+      arguments { {monster_name: 'Ceryneian Hind', species_name: 'red deer' } }
+    end
+    trait :birds do
+      arguments { {monster_name: 'Stymphalian Birds', species_name: 'marsh bird' } }
+    end
+  end
 end
 
 def fixture(name)
