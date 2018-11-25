@@ -5,6 +5,10 @@ describe LoadController do
     OUTER_APP
   end
 
+  after(:each) do
+    stubs.clear
+  end
+
   context '#schedule' do
     def load(post, user_type=:editor)
       auth_header(user_type)

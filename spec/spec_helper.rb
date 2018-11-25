@@ -7,6 +7,7 @@ require 'etna'
 require 'simplecov'
 require 'timecop'
 require 'webmock/rspec'
+require_relative 'stubs'
 
 SimpleCov.start
 
@@ -270,6 +271,10 @@ AUTH_USERS = {
 
 def auth_header(user_type)
   header(*Etna::TestAuth.token_header(AUTH_USERS[user_type]))
+end
+
+def stubs
+  @stubs ||= Stubs.new
 end
 
 def json_post(endpoint, hash)
