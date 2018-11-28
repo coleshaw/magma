@@ -39,7 +39,12 @@ describe UpdateController do
     )
 
     expect(last_response.status).to eq(200)
+
+
+    # new records are created
     expect(Labors::Labor.count).to be(2)
+
+    # we are informed of the change
     expect(json_body[:models][:project][:documents][:'The Two Labors of Hercules']).to eq(name: 'The Two Labors of Hercules', labor: [ 'Lernean Hydra', 'Nemean Lion' ])
   end
 

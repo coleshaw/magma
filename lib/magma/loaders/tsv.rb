@@ -1,44 +1,47 @@
-class TSVLoader < Magma::Loader
-  description "Insert or update data from a TSV file"
+class Magma
+  class TSVLoader < Magma::Loader
+    description "Insert or update data from a TSV file"
 
-  def load file, project_name, model_name
-    @table = CSV.read(file, col_sep: "\t")
-    @model = Magma.instance.get_model(project_name, model_name)
-    @header = @table.shift.map(&:to_sym)
+    arguments model_name: String,
+      file: File
 
-    bad_attributes = @header.reject do |name| @model.has_attribute?(name) end
+    def load
+      @table = CSV.read(@arguments[:file], col_sep: "\t")
+      @model = Magma.instance.get_model(@project_name, @arguments[:model_name])
+      @header = @table.shift.map(&:to_sym)
 
-    raise "Could not find attributes named #{bad_attributes.join(", ")} on #{model}" unless bad_attributes.empty?
-  end
+      bad_attributes = @header.reject do |name| @model.has_attribute?(name) end
 
-  def dispatch
-    inserts = 0
-    @insert_size = 100_000
-    until @table.empty?
-      puts "#{DateTime.now} Inserting #{inserts * @insert_size + 1} to #{(inserts+1) * @insert_size}"
-      create_self_records
+      raise Magma::LoadFailed.new(["Could not find attributes named #{bad_attributes.join(", ")} on #{model}"]) unless bad_attributes.empty?
 
-      puts "#{DateTime.now} Dispatching..."
-      dispatch_record_set
-      inserts += 1
+      inserts = 0
+      @insert_size = 100_000
+      until @table.empty?
+        puts "#{DateTime.now} Inserting #{inserts * @insert_size + 1} to #{(inserts+1) * @insert_size}"
+        create_self_records
+
+        puts "#{DateTime.now} Dispatching..."
+        dispatch_record_set
+        inserts += 1
+      end
     end
-  end
 
-  private
+    private
 
-  def create_self_records
-    now = DateTime.now
+    def create_self_records
+      now = DateTime.now
 
-    rows = @table.shift(@insert_size)
+      rows = @table.shift(@insert_size)
 
-    rows.each do |row|
-      push_record(
-        @model, 
-        Hash[@header.zip(row)].merge(
-          created_at: now,
-          updated_at: now
+      rows.each do |row|
+        push_record(
+          @model,
+          Hash[@header.zip(row)].merge(
+            created_at: now,
+            updated_at: now
+          )
         )
-      )
+      end
     end
   end
 end

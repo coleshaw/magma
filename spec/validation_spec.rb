@@ -53,10 +53,11 @@ describe Magma::Validation do
 
     it 'validates a child identifier' do
       stub_match(Labors::Monster, :name, /^[A-Z][a-z]+ [A-Z][a-z]+$/)
+      create(:monster, :lion)
 
       # fails
       errors = validate(Labors::Labor, name: 'Nemean Lion', monster: 'nemean lion')
-      expect(errors).to eq(["On monster, 'nemean lion' is improperly formatted."])
+      expect(errors).to eq(["On monster, 'nemean lion' is improperly formatted.", "No such monster 'nemean lion'." ])
 
       # passes
       errors = validate(Labors::Labor, name: 'Nemean Lion', monster: 'Nemean Lion')
@@ -65,10 +66,11 @@ describe Magma::Validation do
 
     it 'validates a foreign key identifier' do
       stub_match(Labors::Monster, :name, /^[A-Z][a-z]+ [A-Z][a-z]+$/)
+      create(:monster, :lion)
 
       # fails
       errors = validate(Labors::Victim, name: 'Outis Koutsonadis', monster: 'nemean lion')
-      expect(errors).to eq(["On monster, 'nemean lion' is improperly formatted."])
+      expect(errors).to eq(["On monster, 'nemean lion' is improperly formatted.", "No such monster 'nemean lion'." ])
 
       # passes
       errors = validate(Labors::Victim, name: 'Outis Koutsonadis', monster: 'Nemean Lion')
@@ -77,14 +79,22 @@ describe Magma::Validation do
 
     it 'validates a collection' do
       stub_match(Labors::Labor, :name, /^[A-Z][a-z]+ [A-Z][a-z]+$/)
+      create(:labor, :lion)
+      create(:labor, :stables)
+      create(:labor, :hydra)
 
       # fails
       errors = validate(Labors::Project, name: 'The Three Labors of Hercules', labor: [ 'Nemean Lion', 'augean stables', 'lernean hydra' ])
-      expect(errors).to eq(["On labor, 'augean stables' is improperly formatted.", "On labor, 'lernean hydra' is improperly formatted."])
+      expect(errors).to eq([
+        "On labor, 'augean stables' is improperly formatted.",
+        "On labor, 'lernean hydra' is improperly formatted.",
+        "No such labor 'augean stables'.",
+        "No such labor 'lernean hydra'."
+      ])
 
       # fails
       errors = validate(Labors::Project, name: 'The Three Labors of Hercules', labor: 'labors.txt')
-      expect(errors).to eq(["labors.txt is not an Array."])
+      expect(errors).to eq(["labors.txt is not an Array.", "No such labor 'labors.txt'."])
 
       # passes
       errors = validate(Labors::Project, name: 'The Three Labors of Hercules', labor: [ 'Nemean Lion', 'Augean Stables', 'Lernean Hydra' ])
@@ -124,6 +134,7 @@ describe Magma::Validation do
 
   context 'dictionary validations' do
     it 'fails to validate with an empty dictionary' do
+      create(:monster,:lion)
       errors = validate(
         Labors::Aspect,
         monster: 'Nemean Lion',
@@ -153,6 +164,8 @@ describe Magma::Validation do
     end
 
     def build_codex
+      create(:monster, :lion)
+      create(:monster, :hydra)
       create_codex_set(
         'hide',
         lion: { bullfinch: [ String, 'fur' ], graves: [ String, 'leather' ] },
