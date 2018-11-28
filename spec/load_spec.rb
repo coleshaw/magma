@@ -161,10 +161,109 @@ describe LoadController do
         expect(File.exists?(task.files.first)).to be_truthy
       end
     end
+  end
 
-    it 'complains with missing params.' do
-      load(project_name: 'labors')
-      expect(last_response.status).to eq(422)
+  context 'execution' do
+    before(:each) do
+      module Labors
+        class MonsterTSVLoader < Magma::Loader
+          arguments monster_list: File
+
+          def load
+            csv = CSV.read(
+              @arguments[:monster_list],
+              col_sep: "\t"
+            )
+            header = [ :name, :species ]
+            csv.each do |record|
+              push_record(Labors::Monster, header.zip( record ).to_h)
+            end
+
+            dispatch_record_set
+          end
+        end
+      end
+    end
+    after(:each) do
+      Labors.send :remove_const, :MonsterTSVLoader
+    end
+
+    it 'runs the load request and updates status' do
+      @monster_tsv = stubs.create_file(
+        'tmp', 'monster.tsv',
+        [ "Nemean Lion\tlion", "Stymphalian Birds\tmarsh bird" ].join("\n")
+      )
+      # we try to load a monster table
+      auth_header(:editor)
+      post(
+        '/load',
+        project_name: 'labors',
+        loader_name: 'monster_tsv',
+        monster_list: Rack::Test::UploadedFile.new(
+          @monster_tsv, 'application/octet-stream'
+        )
+      )
+
+      # First, the load request is created
+      expect(last_response.status).to eq(200)
+      monster_load_request = LoadRequest.first
+      expect(monster_load_request).to be
+
+      # Next, somewhere the load_request is executed
+      monster_load_request.execute!
+
+      # The actual data is created
+      expect(Labors::Monster.count).to eq(2)
+      expect(Labors::Monster.select_map(:species)).to eq(['lion', 'marsh bird'])
+
+      # The load_request is updated to note the new status
+      monster_load_request.refresh
+      expect(monster_load_request.status).to eq(LoadRequest::STATUS_COMPLETE)
+
+      # The message returns the number of records inserted into the database
+      expect(monster_load_request.message).to eq('Loading complete, 2 records inserted and 0 updated.')
+
+      # The inputs are no longer needed and thus discarded
+      expect(monster_load_request.files).to all( satisfy {|f| !::File.exists?(f) } )
+    end
+
+    it 'runs the load request and reports validation errors' do
+      @monster_tsv = stubs.create_file(
+        'tmp', 'monster.tsv',
+        [ "Nemean Lion\tLion", "Stymphalian Birds\tmarsh bird" ].join("\n")
+      )
+      # we try to load a monster table
+      auth_header(:editor)
+      post(
+        '/load',
+        project_name: 'labors',
+        loader_name: 'monster_tsv',
+        monster_list: Rack::Test::UploadedFile.new(
+          @monster_tsv, 'application/octet-stream'
+        )
+      )
+
+      # First, the load request is created
+      expect(last_response.status).to eq(200)
+      monster_load_request = LoadRequest.first
+      expect(monster_load_request).to be
+
+      # Next, somewhere the load_request is executed
+      monster_load_request.execute!
+
+      # The records are not created due to a validation error
+      expect(Labors::Monster.count).to eq(0)
+      expect(Labors::Monster.select_map(:species)).to eq([])
+
+      # The load_request is updated to note the new status
+      monster_load_request.refresh
+      expect(monster_load_request.status).to eq(LoadRequest::STATUS_FAILED)
+
+      # The message returns the problem
+      expect(monster_load_request.message).to eq("Loading failed with these complaints:\n - On species, 'Lion' is improperly formatted.")
+
+      # The inputs, being suspicious, are discarded
+      expect(monster_load_request.files).to all( satisfy {|f| !::File.exists?(f) } )
     end
   end
 

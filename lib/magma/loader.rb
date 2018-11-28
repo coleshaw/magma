@@ -38,6 +38,10 @@ class Magma
         end.keys : []
       end
 
+      def file_argument?(arg_name)
+        @arguments[arg_name.to_sym] == File
+      end
+
       private
 
       def valid_argument?(arg_name, user_argument)
@@ -82,12 +86,17 @@ class Magma
       end
     end
 
-    def initialize(project_name)
+    def initialize(project_name, arguments={})
       @project_name = project_name
+      @arguments = arguments
       @records = {}
       @temp_id_counter = 0
       @validator = Magma::Validation.new
+      @insert_count = 0
+      @update_count = 0
     end
+
+    attr_reader :insert_count, :update_count
 
     def push_record(model, document)
       records(model) << RecordEntry.new(model, document, records(model), self)
@@ -170,10 +179,9 @@ class Magma
         insert_records = record_set.select(&:valid_new_entry?)
         update_records = record_set.select(&:valid_update_entry?)
 
-        # Print the insert and update stats.
-        msg = "Found #{insert_records.count} records to insert and "
-        msg += "#{update_records.count} records to update for #{model}."
-        puts msg
+        # Update the insert and update stats.
+        @insert_count += insert_records.count
+        @update_count += update_records.count
 
         # Run the record insertion.
         insert_ids = model.multi_insert(
