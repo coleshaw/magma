@@ -108,28 +108,38 @@ EOT
   end
 
   class Load < Etna::Command
-    usage 'Run data loaders on models for current dataset.'
+    usage 'Run data loaders on project models.'
 
-    def execute(*args)
+    def execute(project_name=nil, loader_name=nil, *args)
       loaders = Magma.instance.find_descendents(Magma::Loader)
 
-      if args.empty?
+      if !project_name || !loader_name
         # List available loaders
         puts 'Available loaders:'
-        loaders.each do |loader|
+        puts "\nmagma"
+        Magma::Loader.list.select do |loader|
+          loader.project_name == :magma
+        end.each do |loader|
           puts "%30s  %s" % [ loader.loader_name, loader.description ]
+        end
+
+        Magma.instance.magma_projects.each do |project_name, project|
+          puts "\n#{project_name}"
+          project.loaders.select do |loader|
+            loader.project_name == project_name
+          end.each do |loader|
+            puts "%30s  %s" % [ loader.loader_name, loader.description ]
+          end
         end
         exit
       end
 
-      loader = loaders.find do |l| l.loader_name == args[0] end
+      loader = Magma.instance.get_project(project_name).get_loader(loader_name)
 
-      raise "Could not find a loader named #{args[0]}" unless loader
+      raise "Could not find a loader named #{loader_name}" unless loader
 
-      loader = loader.new
-      loader.load(*args[1..-1])
       begin
-        loader.dispatch
+        loader.new(project_name, loader.arguments.keys.zip(args).to_h).load
       rescue Magma::LoadFailed => e
         puts "Load failed with these complaints:"
         puts e.complaints
