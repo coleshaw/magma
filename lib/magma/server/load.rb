@@ -5,6 +5,15 @@ class LoadController < Magma::Controller
     super
   end
 
+  def loaders
+    success(
+      {
+        loaders: Magma::Loader.list.map(&:to_hash)
+      }.to_json,
+      'application/json'
+    )
+  end
+
   def status
     tasks = LoadRequest.where(
       project_name: @params[:project_name],

@@ -9,6 +9,9 @@ describe LoadController do
     stubs.clear
   end
 
+  context '#loaders' do
+  end
+
   context '#schedule' do
     def load(post, user_type=:editor)
       auth_header(user_type)

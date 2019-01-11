@@ -152,6 +152,19 @@ EOT
     end
   end
 
+  class LoadRequests < Etna::Command
+    usage 'Run load requests'
+    def execute
+    end
+
+    def setup(config)
+      super
+      Magma.instance.load_models
+
+      puts LoadRequest.count
+    end
+  end
+
   class Unload < Etna::Command
     usage '<project_name> <model_name> # Dump the dataset of the model into a tsv'
 

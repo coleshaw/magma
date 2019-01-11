@@ -24,8 +24,12 @@ class Magma
 
     post '/update', action: 'update#action', auth: { user: { can_edit?: :project_name } }
 
-    get '/load/:project_name', action: 'load#status', auth: { user: { can_edit?: :project_name } }
-    post '/load', action: 'load#schedule', auth: { user: { can_edit?: :project_name } }
+    with auth: { user: { can_edit?: :project_name } } do
+      get '/loaders', action: 'load#loaders'
+
+      get '/load/:project_name', action: 'load#status', auth: { user: { can_edit?: :project_name } }
+      post '/load', action: 'load#schedule', auth: { user: { can_edit?: :project_name } }
+    end
 
     get '/' do
       [ 200, {}, 'Magma On.' ]
